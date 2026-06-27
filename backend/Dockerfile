@@ -1,7 +1,7 @@
 # 1. Base Image
 FROM python:3.11-slim
 
-# 2. System Dependencies
+#2. System Dependencies
 RUN apt-get update && apt-get install -y cron && rm -rf /var/lib/apt/lists/*
 # 3. Working Directory
 WORKDIR /app
