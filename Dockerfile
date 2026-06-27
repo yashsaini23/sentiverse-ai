@@ -5,25 +5,19 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
-# 1. CREATE USER FIRST
-RUN adduser --disabled-password --gecos "" appuser
-
-# 2. THEN CHANGE OWNERSHIP
+# 1. Create a directory for the cron PID and set ownership to your user
 RUN mkdir -p /var/run/crond && chown -R appuser:appuser /var/run/crond
-RUN chown -R appuser:appuser /app
 
-# 3. CONFIGURE CRON
+# 2. Configure your crontab as before
 RUN echo "0 0 * * 1 python -m backend.app.db.scraper" > /etc/cron.d/content-cron
 RUN chmod 0644 /etc/cron.d/content-cron
 RUN crontab /etc/cron.d/content-cron
 
-# Keep all your previous RUN/COPY commands, just replace the final part:
-
-# Ensure the backend directory is in the path so 'from app...' works
-ENV PYTHONPATH=/app/backend
+# 3. Ensure your user is created BEFORE you set permissions
+RUN adduser --disabled-password --gecos "" appuser
+RUN chown -R appuser:appuser /app
 
 USER appuser
-
 # Start cron and uvicorn correctly
 # cron -f runs in the foreground
 # Change --workers 1 to --workers 1 and ensure it's not a higher number
