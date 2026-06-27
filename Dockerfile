@@ -26,4 +26,5 @@ USER appuser
 
 # Start cron and uvicorn correctly
 # cron -f runs in the foreground
-CMD ["sh", "-c", "cron & uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1"]
+# Change --workers 1 to --workers 1 and ensure it's not a higher number
+CMD ["sh", "-c", "cron & uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --workers 1 --loop uvloop"]
