@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    networks:
+      - sentiverse-network
+
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/sentiverse
+      - REDIS_URL=redis://redis:6379/0
+      - CHROMA_DB_DIR=/app/chroma_data
+    volumes:
+      - ./backend:/app
+      - chroma-data:/app/chroma_data
+    depends_on:
+      - db
+      - redis
+    networks:
+      - sentiverse-network
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=sentiverse
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    networks:
+      - sentiverse-network
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - sentiverse-network
+
+networks:
+  sentiverse-network:
+    driver: bridge
+
+volumes:
+  pg-data:
+  chroma-data:

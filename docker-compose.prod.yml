@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - sentiverse-prod
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: always
+    environment:
+      # In production, Nginx handles routing, so API calls go to the same origin
+      - NEXT_PUBLIC_API_URL=
+    networks:
+      - sentiverse-prod
+
+  backend:
+    build:
+      context: ./backend
+    restart: always
+    environment:
+      - ENVIRONMENT=production
+      - REDIS_URL=redis://redis:6379/0
+      - CHROMA_DB_DIR=/app/chroma_data
+    env_file:
+      - ./backend/.env
+    volumes:
+      - chroma-data-prod:/app/chroma_data
+    depends_on:
+      - redis
+    networks:
+      - sentiverse-prod
+
+  redis:
+    image: redis:alpine
+    restart: always
+    volumes:
+      - redis-data-prod:/data
+    networks:
+      - sentiverse-prod
+
+networks:
+  sentiverse-prod:
+    driver: bridge
+
+volumes:
+  chroma-data-prod:
+  redis-data-prod:
