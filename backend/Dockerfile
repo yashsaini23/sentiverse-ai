@@ -7,10 +7,11 @@ RUN apt-get update && apt-get install -y cron && rm -rf /var/lib/apt/lists/*
 # 3. Working Directory
 WORKDIR /app
 
-# 4. Copy Dependencies First (for better caching)
-COPY requirements.txt .
+# 4. Copy Dependencies
+# If the file is in the same folder as the Dockerfile, this should work.
+# If it still fails, use the explicit path:
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
-
 # 5. Copy Application Code
 COPY . .
 
