@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 # --- Core Infrastructure Imports ---
-from app.core.config import settings
+from backend.app.core.config import settings
 from app.core.sanitizer import InputSanitizer
 from app.core.memory import memory_manager
 from app.core.security import rate_limiter
