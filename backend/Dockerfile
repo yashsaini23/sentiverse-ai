@@ -23,6 +23,16 @@ RUN crontab /etc/cron.d/content-cron
 RUN adduser --disabled-password --gecos "" appuser
 RUN chown -R appuser:appuser /app
 USER appuser
+# Fix permissions so cron can write to its directory
+RUN mkdir -p /var/run/crond && chown appuser:appuser /var/run/crond
 
-# 8. Start Service
-CMD ["sh", "-c", "cron -f & uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --loop uvloop --http httptools"]
+# Create non-root user and set ownership
+RUN adduser --disabled-password --gecos "" appuser
+RUN chown -R appuser:appuser /app
+
+USER appuser
+
+# Use the absolute path to your Python module
+# If your project is 'backend/app', ensure we are in the right WORKDIR
+CMD ["sh", "-c", "cron -f & uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1"]
+2. Fix the Module Path (The ModuleNotFoundError)
