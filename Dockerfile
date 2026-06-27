@@ -4,11 +4,18 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
-# We reference 'backend' explicitly because the Dockerfile is now in the root
+
+# Fix cron permissions
+RUN mkdir -p /var/run/crond && chown -R appuser:appuser /var/run/crond
 RUN echo "0 0 * * 1 python -m backend.app.db.scraper" > /etc/cron.d/content-cron
 RUN chmod 0644 /etc/cron.d/content-cron
 RUN crontab /etc/cron.d/content-cron
+
+# Set permissions for the app
 RUN adduser --disabled-password --gecos "" appuser
 RUN chown -R appuser:appuser /app
 USER appuser
-CMD ["sh", "-c", "cron -f & uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --workers 1"]
+
+# Add the root directory to PYTHONPATH so 'import app' works from anywhere
+ENV PYTHONPATH=/app
+CMD ["sh", "-c", "cron -f -P /var/run/crond.pid & uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --workers 1"]
