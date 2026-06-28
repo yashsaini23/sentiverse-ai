@@ -52,35 +52,35 @@ Content Filtering & Ranking
 Personalized Recommendations
 📂 Project Structure
 sentiverse/
-├── .github/workflows/         # CI/CD pipelines
-├── backend/                   # FastAPI Python Server
+├── .github/workflows/         
+├── backend/                  
 │   ├── app/
-│   │   ├── api/               # REST endpoints
-│   │   ├── core/              # Configs, Security, JWT
-│   │   ├── db/                # PostgreSQL & VectorDB clients
-│   │   ├── ml/                # AI Models
+│   │   ├── api/              
+│   │   ├── core/             
+│   │   ├── db/                
+│   │   ├── ml/                
 │   │   │   ├── model_loader.py
 │   │   │   ├── embeddings.py
 │   │   │   └── emotion_classifier.py
-│   │   ├── services/          # Business logic
+│   │   ├── services/         
 │   │   │   └── recommendation.py
-│   │   ├── schemas/           # Pydantic models
-│   │   └── main.py            # FastAPI entry point
-│   ├── tests/                 # Pytest directory
+│   │   ├── schemas/          
+│   │   └── main.py            
+│   ├── tests/                 
 │   ├── Dockerfile
 │   └── requirements.txt
-├── frontend/                  # Next.js Application
+├── frontend/                  
 │   ├── src/
-│   │   ├── app/               # Pages (page.tsx, layout.tsx)
-│   │   ├── components/        # UI (MoodInput, MediaCard)
-│   │   ├── hooks/             # Custom React hooks
-│   │   ├── lib/               # API clients, utilities
-│   │   └── store/             # Zustand state management
-│   ├── public/                # Static assets
+│   │   ├── app/              
+│   │   ├── components/       
+│   │   ├── hooks/             
+│   │   ├── lib/              
+│   │   └── store/             
+│   ├── public/               
 │   ├── tailwind.config.ts
 │   ├── package.json
 │   └── Dockerfile
-├── data/                      # Initial datasets (ignored in git)
+├── data/                     
 ├── docker-compose.yml
 └── README.md
 
