@@ -25,6 +25,7 @@ services:
     env_file:
       - path: ./backend/.env
         required: false
+    command: ["sh", "-c", "python -m app.db.seed && exec uvicorn app.main:app --app-dir /app/backend --host 0.0.0.0 --port 8000"]
     volumes:
       - ./backend:/app/backend
       - chroma-data:/app/data/chroma
