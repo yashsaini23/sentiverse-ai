@@ -43,7 +43,7 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: http://localhost:8000
         run: |
-          npm ci
+          npm install
           npm run build
 
   build-backend-image:
