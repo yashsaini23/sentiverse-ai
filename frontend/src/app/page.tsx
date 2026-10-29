@@ -233,7 +233,7 @@ export default function Home() {
               <div className="w-full sm:w-auto"><MediaFilters selectedFilters={filters} onChange={setFilters} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-              {results.map((item, index) => <motion.div key={item.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.08 }}><RecommendationCard item={item} onRefine={handleRefinement} /></motion.div>)}
+              {results.map((item, index) => <motion.div key={item.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index < 12 ? index * 0.025 : 0 }}><RecommendationCard item={item} onRefine={handleRefinement} /></motion.div>)}
             </div>
           </section>
         )}
