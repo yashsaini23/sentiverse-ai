@@ -164,7 +164,7 @@ class MediaProviderHub:
                         if all(item.id != candidate.id for item in interleaved):
                             interleaved.append(candidate)
             grouped = interleaved
-        return grouped[:max(1, min(limit, 20))]
+        return grouped[:max(1, min(limit, 100))]
 
 
 media_provider_hub = MediaProviderHub()
