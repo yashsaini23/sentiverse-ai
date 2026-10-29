@@ -11,11 +11,11 @@ async def seed_database() -> None:
     db_path = Path(settings.CHROMA_DB_DIR).expanduser()
     db_path.mkdir(parents=True, exist_ok=True)
     client = chromadb.PersistentClient(path=str(db_path))
-    try:
-        client.delete_collection("media_content")
-    except Exception:
-        pass
-    collection = client.create_collection(name="media_content")
+    collection = client.get_or_create_collection(name="media_content")
+    existing_count = collection.count()
+    if existing_count > 0:
+        print(f"Media catalogue already contains {existing_count} records; skipping seed.")
+        return
 
     dataset = [
         {"id": "m-101", "title": "Interstellar", "medium": "Movie", "description": "A team of explorers travels through a wormhole to help ensure humanity's survival.", "emotions": "lonely, hopeless, nostalgic, awe-inspiring", "themes": "cosmic isolation, father-daughter bond, sacrifice, human resilience", "tone": "melancholic, epic, hopeful", "ending_type": "bittersweet", "pacing": "slow-burn"},
