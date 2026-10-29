@@ -26,7 +26,8 @@ GENRE_NAMES = {
 
 class TMDBCatalogue:
     async def recommend(
-        self, query: str, limit: int = 4, medium_filters: Sequence[str] | None = None
+        self, query: str, limit: int = 4, medium_filters: Sequence[str] | None = None,
+        region: str = "IN", language: str = "all"
     ) -> list[RecommendationResponse]:
         if not settings.TMDB_API_KEY:
             return []
@@ -48,16 +49,18 @@ class TMDBCatalogue:
                 collected = []
                 # TMDB returns up to 20 titles per page. Fetch only as many pages as needed.
                 for page in range(1, min(6, (limit + 19) // 20 + 1)):
-                    response = await client.get(
-                        f"{TMDB_API}{endpoint}",
-                        params={
-                            "api_key": settings.TMDB_API_KEY,
-                            "language": "en-US",
-                            "sort_by": "popularity.desc",
-                            "include_adult": "false",
-                            "page": page,
-                        },
-                    )
+                    params = {
+                        "api_key": settings.TMDB_API_KEY,
+                        "language": "en-US",
+                        "sort_by": "popularity.desc",
+                        "include_adult": "false",
+                        "page": page,
+                    }
+                    if region != "GLOBAL":
+                        params["region"] = region
+                    if language != "all":
+                        params["with_original_language"] = language
+                    response = await client.get(f"{TMDB_API}{endpoint}", params=params)
                     response.raise_for_status()
                     page_items = response.json().get("results", [])
                     collected.extend(page_items)
