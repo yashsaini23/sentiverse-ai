@@ -77,8 +77,10 @@ class MediaProviderHub:
             page_limit = min(40, limit - start_index)
             params = {
                 "q": query, "maxResults": page_limit, "startIndex": start_index,
-                "printType": "books", "langRestrict": (language if language != "all" else "en"),
+                "printType": "books",
             }
+            if language not in {"all", "regional"}:
+                params["langRestrict"] = language
             if settings.GOOGLE_BOOKS_API_KEY:
                 params["key"] = settings.GOOGLE_BOOKS_API_KEY
             batch = await self._get(client, GOOGLE_BOOKS, params)
