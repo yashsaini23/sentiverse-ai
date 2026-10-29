@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4o-mini"
     OPENAI_TIMEOUT_SECONDS: float = 20.0
     TMDB_API_KEY: str | None = None
+    RAWG_API_KEY: str | None = None
+    GOOGLE_BOOKS_API_KEY: str | None = None
     RATE_LIMIT_PER_MINUTE: int = 15
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
