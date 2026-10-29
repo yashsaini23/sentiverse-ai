@@ -68,7 +68,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query,
-          limit: 4,
+          limit: 100,
           session_id: sessionId,
           medium_filters: filters,
         }),
@@ -227,12 +227,12 @@ export default function Home() {
         )}
 
         {!loading && results.length > 0 && (
-          <section className="mt-12 w-full max-w-6xl" aria-live="polite">
+          <section className="mt-12 w-full max-w-[1600px]" aria-live="polite">
             <div className="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
               <div><p className="sv-section-kicker">CURATED FOR THIS MOMENT</p><h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Your next favourite stories.</h2><p className="mt-2 text-sm text-slate-400">Picked for the mood you shared — not just a genre.</p></div>
               <div className="w-full sm:w-auto"><MediaFilters selectedFilters={filters} onChange={setFilters} /></div>
             </div>
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
               {results.map((item, index) => <motion.div key={item.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.08 }}><RecommendationCard item={item} onRefine={handleRefinement} /></motion.div>)}
             </div>
           </section>
