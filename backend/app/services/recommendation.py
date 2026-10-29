@@ -33,7 +33,7 @@ class RecommendationService:
 
         excluded = set(exclude_ids or [])
         filters = list(dict.fromkeys(medium_filters or []))
-        safe_limit = max(1, min(int(limit), 20))
+        safe_limit = max(1, min(int(limit), 100))
         collection_count = self.collection.count()
         if collection_count == 0:
             return []
