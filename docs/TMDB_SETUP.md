@@ -21,7 +21,7 @@ Providers are isolated: if one service is temporarily unavailable, the other cat
 3. Copy `backend/.env.example` to `backend/.env` and fill in any keys you have:
 
    ```dotenv
-   TMDB_API_KEY=your_tmdb_v3_api_key
+   TMDB_API_KEY=your_rotated_tmdb_api_key
    RAWG_API_KEY=your_rawg_api_key
    GOOGLE_BOOKS_API_KEY=
    ```
@@ -30,13 +30,30 @@ Providers are isolated: if one service is temporarily unavailable, the other cat
 
 4. Rebuild/restart the backend so environment changes load:
 
-   ```powershell
+   ```bash
    docker compose up -d --build backend
    ```
 
 5. Open http://localhost:3000 and choose **All**, **Movie**, **TV**, **Anime**, **Game**, **Book**, or **Podcast**.
 
-Never commit `backend/.env`, API keys, or credentials to GitHub. Put keys only in backend environment configuration or a deployment secret store.
+## Configure a deployed environment
+
+A local `backend/.env` file only configures your local checkout. It does not automatically configure GitHub Actions or a hosted application.
+
+- **Hosted backend:** open your hosting provider's service settings and add `TMDB_API_KEY` as a runtime environment variable. Add `RAWG_API_KEY` if you want live game search. Save the settings and redeploy/restart the backend.
+- **GitHub Actions:** if a workflow needs the key during a CI job, add it under **Repository → Settings → Secrets and variables → Actions → New repository secret**. Name it `TMDB_API_KEY`, then explicitly map `${{ secrets.TMDB_API_KEY }}` to the workflow step/job environment that needs it. A GitHub Actions secret is **not** automatically passed to a separately hosted backend; configure the hosting provider too.
+- Never put real keys in source files, commits, screenshots, issue comments, logs, or frontend `NEXT_PUBLIC_*` variables. The TMDB key belongs only on the backend.
+- If a key has been pasted into chat, a public issue, or a repository commit, rotate/revoke it in the provider dashboard and use the replacement.
+
+## Verify the integration
+
+After setting the key, rebuild/restart the backend and inspect its logs for startup or provider errors:
+
+```bash
+docker compose logs --tail=100 backend
+```
+
+Then submit a recommendation request from the UI with **Movie** or **TV** selected. A successful backend startup alone does not prove the external TMDB request is working; check the response and logs as well.
 
 ## Media artwork sizing
 
