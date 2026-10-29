@@ -1,18 +1,24 @@
-import jwt
 import datetime
-from passlib.context import CryptContext
+from datetime import timezone
 
-SECRET_KEY = "SUPER_SECRET_KEY_REPLACE_IN_PROD" # Use an env variable here
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+import jwt
+from pwdlib import PasswordHash
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+from app.core.config import settings
 
-def get_password_hash(password):
-    return pwd_context.hash(password)
+password_hash = PasswordHash.recommended()
 
-def create_access_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.datetime.utcnow() + datetime.timedelta(hours=24)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm="HS256")
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return password_hash.verify(plain_password, hashed_password)
+
+
+def get_password_hash(password: str) -> str:
+    return password_hash.hash(password)
+
+
+def create_access_token(data: dict, expires_hours: int = 24) -> str:
+    if not settings.SECRET_KEY:
+        raise RuntimeError("Configure SECRET_KEY in the environment before creating access tokens.")
+    expires_at = datetime.datetime.now(timezone.utc) + datetime.timedelta(hours=expires_hours)
+    return jwt.encode({**data, "exp": expires_at}, settings.SECRET_KEY, algorithm="HS256")
