@@ -1,104 +1,112 @@
 import asyncio
-import chromadb
 import json
-from typing import List
+import logging
+from pathlib import Path
+from collections.abc import Sequence
+
+import chromadb
+
+from app.core.config import settings
 from app.ml.embeddings import embedding_engine
 from app.schemas.media import RecommendationResponse
 from app.services.llm_explainer import llm_explainer
 
+logger = logging.getLogger(__name__)
+
+
 class RecommendationService:
-    def __init__(self):
-        self.chroma_client = chromadb.PersistentClient(path="/app/chroma_data")
+    def __init__(self) -> None:
+        db_path = Path(settings.CHROMA_DB_DIR).expanduser()
+        db_path.mkdir(parents=True, exist_ok=True)
+        self.chroma_client = chromadb.PersistentClient(path=str(db_path))
         self.collection = self.chroma_client.get_or_create_collection(name="media_content")
 
     async def get_recommendations(
-        self, 
-        mood_query: str, 
-        limit: int = 5, 
-        exclude_ids: List[str] = None,
-        medium_filters: List[str] = None
-    ) -> List[RecommendationResponse]:
-        
-        if exclude_ids is None: exclude_ids = []
-        if medium_filters is None: medium_filters = []
-
-        # 1. Generate Embeddings
-        query_embedding = await embedding_engine.generate_embedding_async(mood_query)
-
-        # 2. Database Filtering
-        where_clause = None
-        if medium_filters:
-            if len(medium_filters) == 1:
-                where_clause = {"medium": medium_filters[0]}
-            else:
-                where_clause = {"$or": [{"medium": m} for m in medium_filters]}
-
-        fetch_limit = limit + len(exclude_ids)
-        loop = asyncio.get_running_loop()
-        
-        def _query_db():
-            return self.collection.query(
-                query_embeddings=[query_embedding],
-                n_results=fetch_limit,
-                where=where_clause,
-                include=["metadatas", "distances"]
-            )
-
-        results = await loop.run_in_executor(embedding_engine.executor, _query_db)
-
-        if not results['ids'] or not results['ids'][0]:
+        self,
+        mood_query: str,
+        limit: int = 5,
+        exclude_ids: Sequence[str] | None = None,
+        medium_filters: Sequence[str] | None = None,
+    ) -> list[RecommendationResponse]:
+        if not mood_query or not mood_query.strip():
             return []
 
-        # 3. Filter History and Extract Metadata
-        selected_items = []
-        for i in range(len(results['ids'][0])):
-            item_id = results['ids'][0][i]
-            if item_id in exclude_ids:
+        excluded = set(exclude_ids or [])
+        filters = list(dict.fromkeys(medium_filters or []))
+        safe_limit = max(1, min(int(limit), 20))
+        collection_count = self.collection.count()
+        if collection_count == 0:
+            return []
+
+        query_embedding = await embedding_engine.generate_embedding_async(mood_query)
+        where_clause = None
+        if len(filters) == 1:
+            where_clause = {"medium": filters[0]}
+        elif filters:
+            where_clause = {"$or": [{"medium": medium} for medium in filters]}
+
+        loop = asyncio.get_running_loop()
+        def query_database():
+            return self.collection.query(
+                query_embeddings=[query_embedding],
+                n_results=min(collection_count, safe_limit + len(excluded)),
+                where=where_clause,
+                include=["metadatas", "distances"],
+            )
+
+        results = await loop.run_in_executor(embedding_engine.executor, query_database)
+        ids = (results.get("ids") or [[]])[0]
+        metadatas = (results.get("metadatas") or [[]])[0]
+        distances = (results.get("distances") or [[]])[0]
+
+        selected = []
+        for index, item_id in enumerate(ids):
+            if item_id in excluded:
                 continue
-            
-            selected_items.append({
+            selected.append({
                 "id": item_id,
-                "meta": results['metadatas'][0][i],
-                "distance": results['distances'][0][i]
+                "meta": metadatas[index] or {},
+                "distance": float(distances[index] or 0.0),
             })
-            if len(selected_items) == limit:
+            if len(selected) >= safe_limit:
                 break
+        if not selected:
+            return []
 
-        # 4. Generate LLM Explanations in PARALLEL
-        explanation_tasks = [
-            llm_explainer.generate_explanation(mood_query, item["meta"]) 
-            for item in selected_items
-        ]
-        
-        # This executes all LLM API calls simultaneously
-        explanations = await asyncio.gather(*explanation_tasks)
+        explanations = await asyncio.gather(*[
+            llm_explainer.generate_explanation(mood_query, item["meta"], item["id"])
+            for item in selected
+        ])
 
-        # 5. Build Final Response Objects
-        recommendations: List[RecommendationResponse] = []
-        
-        for idx, item in enumerate(selected_items):
+        recommendations = []
+        for index, item in enumerate(selected):
             meta = item["meta"]
             distance = item["distance"]
-            confidence = max(0, min(100, int((1.0 - (distance / 2.0)) * 100)))
-
-            try:
-                streaming_links = json.loads(meta.get("streaming_links", "{}"))
-            except Exception:
-                streaming_links = {}
-
+            confidence = max(0, min(100, round((1.0 - distance / 2.0) * 100)))
+            raw_links = meta.get("streaming_links", {})
+            if isinstance(raw_links, str):
+                try:
+                    raw_links = json.loads(raw_links)
+                except (TypeError, json.JSONDecodeError):
+                    raw_links = {}
+            streaming_links = raw_links if isinstance(raw_links, dict) else {}
+            raw_themes = meta.get("themes", "")
+            themes = raw_themes if isinstance(raw_themes, list) else [
+                part.strip() for part in str(raw_themes).split(",") if part.strip()
+            ]
             recommendations.append(RecommendationResponse(
                 id=item["id"],
                 title=meta.get("title", "Unknown Title"),
                 medium=meta.get("medium", "Unknown Medium"),
-                themes=meta.get("themes", "").split(", ") if meta.get("themes") else [],
+                themes=themes,
                 tone=meta.get("tone", "nuanced"),
                 pacing=meta.get("pacing", "moderate"),
                 ending_type=meta.get("ending_type", "open-ended"),
                 confidence_score=confidence,
-                ai_explanation=explanations[idx], # Using the dynamically generated LLM text
-                streaming_links=streaming_links
+                ai_explanation=explanations[index],
+                streaming_links=streaming_links,
             ))
-        
         return recommendations
+
 
 recommendation_service = RecommendationService()
