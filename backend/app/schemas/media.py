@@ -29,6 +29,11 @@ class RecommendationResponse(BaseModel):
     confidence_score: int = Field(ge=0, le=100)
     ai_explanation: str
     streaming_links: dict[str, str] = Field(default_factory=dict)
+    poster_url: str | None = None
+    backdrop_url: str | None = None
+    overview: str | None = None
+    release_year: str | None = None
+    vote_average: float | None = None
 
 
 class RecommendationWrapperResponse(BaseModel):

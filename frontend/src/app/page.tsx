@@ -21,6 +21,11 @@ interface RecommendationData {
   confidence_score: number;
   ai_explanation: string;
   streaming_links: Record<string, string>;
+  poster_url?: string | null;
+  backdrop_url?: string | null;
+  overview?: string | null;
+  release_year?: string | null;
+  vote_average?: number | null;
 }
 
 const starterMoods = [
@@ -144,8 +149,7 @@ export default function Home() {
             Find the story that <span>feels like you.</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg sm:leading-8">
-            Movies for the mood you can’t explain. Games for the days you need a win.
-            Stories that meet you exactly where you are.
+            A streaming-style universe for the mood you can’t explain. Discover films and series that meet you exactly where you are.
           </p>
         </motion.div>
 
@@ -225,10 +229,10 @@ export default function Home() {
         {!loading && results.length > 0 && (
           <section className="mt-12 w-full max-w-6xl" aria-live="polite">
             <div className="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-              <div><p className="sv-section-kicker">CURATED FOR THIS MOMENT</p><h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">A few stories for you.</h2><p className="mt-2 text-sm text-slate-400">Picked for the mood you shared — not just a genre.</p></div>
+              <div><p className="sv-section-kicker">CURATED FOR THIS MOMENT</p><h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Your next favourite stories.</h2><p className="mt-2 text-sm text-slate-400">Picked for the mood you shared — not just a genre.</p></div>
               <div className="w-full sm:w-auto"><MediaFilters selectedFilters={filters} onChange={setFilters} /></div>
             </div>
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
               {results.map((item, index) => <motion.div key={item.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.08 }}><RecommendationCard item={item} onRefine={handleRefinement} /></motion.div>)}
             </div>
           </section>

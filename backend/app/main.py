@@ -1,6 +1,7 @@
 import asyncio
 import logging
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -11,6 +12,7 @@ from app.core.security import rate_limiter
 from app.ml.emotion_classifier import emotion_engine
 from app.schemas.media import EmotionMetric, MoodRequest, RecommendationWrapperResponse
 from app.services.recommendation import recommendation_service
+from app.services.media_provider_hub import media_provider_hub
 
 logger = logging.getLogger(__name__)
 
@@ -44,13 +46,30 @@ async def recommend_media(
             logger.warning("Session memory unavailable; continuing without history.", exc_info=True)
             context = {"seen_items": [], "mood_history": []}
 
-        recommendations, emotions = await asyncio.gather(
-            recommendation_service.get_recommendations(
+        async def get_media():
+            try:
+                live = await media_provider_hub.recommend(
+                    query=query,
+                    limit=request.limit,
+                    medium_filters=request.medium_filters,
+                )
+                seen = set(context.get("seen_items", []))
+                fresh = [item for item in live if item.id not in seen]
+                if fresh:
+                    return fresh
+                if live:
+                    return live
+            except httpx.HTTPError:
+                logger.exception("A live media provider failed; falling back to local catalogue.")
+            return await recommendation_service.get_recommendations(
                 mood_query=query,
                 limit=request.limit,
                 exclude_ids=context.get("seen_items", []),
                 medium_filters=request.medium_filters,
-            ),
+            )
+
+        recommendations, emotions = await asyncio.gather(
+            get_media(),
             emotion_engine.detect_emotions_async(query),
         )
 
