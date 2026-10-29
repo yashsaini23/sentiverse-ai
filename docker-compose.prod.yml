@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   nginx:
     image: nginx:alpine
@@ -19,14 +17,14 @@ services:
       context: ./frontend
     restart: always
     environment:
-      # In production, Nginx handles routing, so API calls go to the same origin
       - NEXT_PUBLIC_API_URL=
     networks:
       - sentiverse-prod
 
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: Dockerfile
     restart: always
     environment:
       - ENVIRONMENT=production
