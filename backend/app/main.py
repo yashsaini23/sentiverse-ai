@@ -52,6 +52,8 @@ async def recommend_media(
                     query=query,
                     limit=request.limit,
                     medium_filters=request.medium_filters,
+                    region=request.region,
+                    language=request.language,
                 )
                 seen = set(context.get("seen_items", []))
                 fresh = [item for item in live if item.id not in seen]

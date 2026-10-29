@@ -40,6 +40,8 @@ export default function Home() {
   const [mood, setMood] = useState('');
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState<string[]>([]);
+  const [region, setRegion] = useState('IN');
+  const [language, setLanguage] = useState('all');
   const [results, setResults] = useState<RecommendationData[]>([]);
   const [detectedEmotions, setDetectedEmotions] = useState<Emotion[]>([]);
   const [errorMessage, setErrorMessage] = useState('');
@@ -71,6 +73,8 @@ export default function Home() {
           limit: 100,
           session_id: sessionId,
           medium_filters: filters,
+          region,
+          language,
         }),
       });
 
@@ -100,7 +104,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [addToHistory, filters, posthog, sessionId]);
+  }, [addToHistory, filters, language, posthog, region, sessionId]);
 
   const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -191,6 +195,42 @@ export default function Home() {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 gap-3 border-t border-white/[0.07] pt-5 sm:grid-cols-2">
+            <label className="flex flex-col gap-2 text-left text-xs font-medium text-slate-300">
+              Discovery region
+              <select value={region} onChange={(event) => setRegion(event.target.value)} className="rounded-xl border border-white/10 bg-[#10101d] px-3 py-3 text-sm text-white outline-none focus:border-violet-400/60">
+                <option value="IN">India</option>
+                <option value="US">United States</option>
+                <option value="GB">United Kingdom</option>
+                <option value="CA">Canada</option>
+                <option value="AU">Australia</option>
+                <option value="JP">Japan</option>
+                <option value="KR">South Korea</option>
+                <option value="GLOBAL">Global</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-2 text-left text-xs font-medium text-slate-300">
+              Original language
+              <select value={language} onChange={(event) => setLanguage(event.target.value)} className="rounded-xl border border-white/10 bg-[#10101d] px-3 py-3 text-sm text-white outline-none focus:border-violet-400/60">
+                <option value="all">Any language</option>
+                <option value="regional">Indian regional languages</option>
+                <option value="hi">Hindi</option>
+                <option value="ta">Tamil</option>
+                <option value="te">Telugu</option>
+                <option value="ml">Malayalam</option>
+                <option value="kn">Kannada</option>
+                <option value="bn">Bengali</option>
+                <option value="mr">Marathi</option>
+                <option value="pa">Punjabi</option>
+                <option value="gu">Gujarati</option>
+                <option value="en">English</option>
+                <option value="ja">Japanese</option>
+                <option value="ko">Korean</option>
+              </select>
+            </label>
+            <p className="text-xs leading-5 text-slate-500 sm:col-span-2">Regional settings influence movie/TV discovery and supported book/podcast catalogues. Availability depends on each provider.</p>
           </div>
         </motion.div>
 
