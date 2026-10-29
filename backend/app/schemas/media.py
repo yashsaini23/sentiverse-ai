@@ -1,27 +1,38 @@
+from typing import Dict, List, Optional
+
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
+
 
 class MoodRequest(BaseModel):
-    query: str = Field(..., min_length=1, max_length=500, description="Raw natural language mood input string.")
-    limit: int = Field(default=5, ge=1, le=20, description="Maximum items payload generation target count.")
-    session_id: Optional[str] = Field(default="anonymous_default_user", description="Unique token representing active user state context.")
-    medium_filters: List[str] = Field(default=[], description="List of media types to filter by (e.g., ['Movie', 'Anime']). Empty means no filter.")
+    query: str = Field(..., min_length=1, max_length=500, description="Natural-language mood description.")
+    limit: int = Field(default=5, ge=1, le=20, description="Maximum number of recommendations.")
+    session_id: Optional[str] = Field(default="anonymous_default_user", max_length=128)
+    medium_filters: List[str] = Field(
+        default_factory=list,
+        description="Optional media type filters, such as Movie or Anime.",
+    )
+
 
 class EmotionMetric(BaseModel):
     label: str
-    score: float
+    score: float = Field(ge=0.0, le=1.0)
+
 
 class RecommendationResponse(BaseModel):
     id: str
     title: str
     medium: str
-    themes: List[str] = []
+    themes: List[str] = Field(default_factory=list)
     tone: str
     pacing: str
     ending_type: str
-    confidence_score: int
+    confidence_score: int = Field(ge=0, le=100, description="Distance-derived relevance heuristic, not a probability.")
     ai_explanation: str
-    streaming_links: Dict[str, str] = Field(default_factory=dict, description="Key-Value pairs of provider names and deep links.")
+    streaming_links: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Streaming provider names mapped to deep links.",
+    )
+
 
 class RecommendationWrapperResponse(BaseModel):
     status: str
