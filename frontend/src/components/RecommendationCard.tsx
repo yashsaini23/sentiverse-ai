@@ -17,115 +17,129 @@ interface RecommendationProps {
   onRefine: (title: string, context: string) => void;
 }
 
+const mediaArt: Record<string, { icon: string; caption: string; gradient: string }> = {
+  movie: { icon: '▸', caption: 'A story on screen', gradient: 'from-indigo-500/20 via-violet-500/10 to-transparent' },
+  anime: { icon: '✦', caption: 'An animated world', gradient: 'from-fuchsia-500/20 via-violet-500/10 to-transparent' },
+  game: { icon: '⌘', caption: 'A world to step into', gradient: 'from-cyan-500/20 via-indigo-500/10 to-transparent' },
+  novel: { icon: '▤', caption: 'A world between pages', gradient: 'from-amber-500/15 via-violet-500/10 to-transparent' },
+  podcast: { icon: '♫', caption: 'A voice to keep you company', gradient: 'from-emerald-500/15 via-teal-500/10 to-transparent' },
+};
+
 export const RecommendationCard: React.FC<RecommendationProps> = ({ item, onRefine }) => {
   const [isRefining, setIsRefining] = useState(false);
   const [refineText, setRefineText] = useState('');
+  const art = mediaArt[item.medium.toLowerCase()] || mediaArt.movie;
 
-  const handleRefineSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleRefineSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     if (!refineText.trim()) return;
-    onRefine(item.title, refineText);
+    onRefine(item.title, refineText.trim());
     setIsRefining(false);
     setRefineText('');
   };
 
+  const validLinks = Object.entries(item.streaming_links || {}).filter(([, link]) => {
+    try {
+      const url = new URL(link);
+      return url.protocol === 'https:' || url.protocol === 'http:';
+    } catch {
+      return false;
+    }
+  });
+
   return (
-    <motion.div
-      variants={{
-        hidden: { opacity: 0, y: 20 },
-        visible: { opacity: 1, y: 0 }
-      }}
-      className="group relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 transition-all duration-300 hover:border-indigo-500/40 hover:bg-white/[0.07] flex flex-col"
+    <motion.article
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -3 }}
+      transition={{ duration: 0.22 }}
+      className="group relative h-full overflow-hidden rounded-3xl border border-white/[0.09] bg-[#11111d]/90 p-5 shadow-[0_20px_70px_rgba(0,0,0,0.16)] transition-colors hover:border-violet-300/25 sm:p-6"
     >
-      {/* Upper Meta Bar */}
-      <div className="flex items-center justify-between mb-4">
-        <span className="px-3 py-1 rounded-full text-xs font-semibold tracking-wide bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase">
-          {item.medium}
-        </span>
-        <div className="flex items-center space-x-1.5">
-          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-sm font-mono text-emerald-400 font-bold">{item.confidence_score}% Match</span>
-        </div>
-      </div>
+      <div aria-hidden="true" className={`pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-br ${art.gradient}`} />
+      <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-16 h-40 w-40 rounded-full border border-white/[0.05]" />
+      <div aria-hidden="true" className="pointer-events-none absolute -right-2 -top-8 h-24 w-24 rounded-full border border-white/[0.06]" />
 
-      <h3 className="text-2xl font-bold tracking-tight text-white mb-2 group-hover:text-indigo-300 transition-colors">
-        {item.title}
-      </h3>
-
-      <div className="flex flex-wrap gap-1.5 mb-4">
-        {item.themes.map((theme, idx) => (
-          <span key={idx} className="text-xs bg-slate-800/80 text-gray-300 px-2 py-0.5 rounded border border-gray-700/50">
-            {theme}
+      <div className="relative">
+        <div className="flex items-center justify-between gap-3">
+          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-violet-200">
+            <span className="text-sm">{art.icon}</span>{item.medium}
           </span>
-        ))}
-      </div>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/15 bg-emerald-300/[0.07] px-3 py-1.5 text-xs font-semibold text-emerald-200">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" /> {item.confidence_score}% match
+          </span>
+        </div>
 
-      <div className="rounded-xl bg-black/40 p-3.5 border border-white/[0.03] flex-grow mb-4">
-        <p className="text-sm text-gray-400 leading-relaxed font-light">
-          <span className="font-semibold text-indigo-400">AI Note: </span>
-          {item.ai_explanation}
-        </p>
-      </div>
+        <div className="mb-5 mt-7 flex items-end justify-between gap-3">
+          <div>
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{art.caption}</p>
+            <h3 className="max-w-xl text-2xl font-semibold leading-tight tracking-[-0.035em] text-white transition-colors group-hover:text-violet-100 sm:text-[1.7rem]">{item.title}</h3>
+          </div>
+          <span aria-hidden="true" className="hidden text-4xl font-light text-white/15 sm:block">✳</span>
+        </div>
 
-      {/* Streaming Links */}
-      {item.streaming_links && Object.keys(item.streaming_links).length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-2">
-          {Object.entries(item.streaming_links).map(([provider, link]) => (
-            <a
-              key={provider}
-              href={link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-gray-300 transition-colors"
-            >
-              Watch on {provider}
-            </a>
+        <div className="mb-5 flex flex-wrap gap-1.5">
+          {item.themes.slice(0, 6).map((theme) => (
+            <span key={theme} className="rounded-lg border border-white/[0.07] bg-white/[0.035] px-2.5 py-1 text-[11px] text-slate-300">{theme}</span>
           ))}
         </div>
-      )}
 
-      {/* Conversational Refinement UI */}
-      <div className="border-t border-white/10 pt-4">
-        <AnimatePresence mode="wait">
-          {!isRefining ? (
-            <motion.button
-              key="btn"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsRefining(true)}
-              className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-sm font-medium text-gray-400 hover:text-white transition-colors flex items-center justify-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
-              Adjust Recommendation
-            </motion.button>
-          ) : (
-            <motion.form
-              key="form"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              onSubmit={handleRefineSubmit}
-              className="flex gap-2"
-            >
-              <input
-                type="text"
-                autoFocus
-                value={refineText}
-                onChange={(e) => setRefineText(e.target.value)}
-                placeholder="e.g. Too dark, make it happier..."
-                className="flex-1 bg-black/50 border border-white/10 rounded-xl px-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500/50"
-              />
-              <button 
-                type="submit"
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-medium transition-colors"
+        <div className="rounded-2xl border border-violet-200/[0.09] bg-black/20 p-4 sm:p-5">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="grid h-6 w-6 place-items-center rounded-lg bg-violet-400/10 text-sm text-violet-200">✦</span>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-violet-200/80">Why it may resonate</p>
+          </div>
+          <p className="text-sm leading-6 text-slate-300">{item.ai_explanation}</p>
+          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+            <span>Tone <strong className="ml-1 font-medium capitalize text-slate-300">{item.tone}</strong></span>
+            <span>Pacing <strong className="ml-1 font-medium capitalize text-slate-300">{item.pacing}</strong></span>
+            <span>Ending <strong className="ml-1 font-medium capitalize text-slate-300">{item.ending_type}</strong></span>
+          </div>
+        </div>
+
+        {validLinks.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {validLinks.map(([provider, link]) => (
+              <a key={provider} href={link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-medium text-slate-200 transition-colors hover:border-violet-300/25 hover:bg-violet-300/[0.08]">
+                Watch on {provider}<span aria-hidden="true" className="text-slate-500">↗</span>
+              </a>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-5 border-t border-white/[0.08] pt-4">
+          <AnimatePresence mode="wait">
+            {!isRefining ? (
+              <motion.button
+                key="refine-button"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                type="button"
+                onClick={() => setIsRefining(true)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.035] py-3 text-xs font-semibold text-slate-300 transition-all hover:border-violet-300/20 hover:bg-violet-300/[0.06] hover:text-white"
               >
-                Send
-              </button>
-            </motion.form>
-          )}
-        </AnimatePresence>
+                <span aria-hidden="true">⌁</span> Refine this recommendation
+              </motion.button>
+            ) : (
+              <motion.form
+                key="refine-form"
+                initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                onSubmit={handleRefineSubmit}
+                className="flex flex-col gap-2 sm:flex-row"
+              >
+                <input
+                  type="text"
+                  autoFocus
+                  value={refineText}
+                  onChange={(event) => setRefineText(event.target.value)}
+                  placeholder="Make it lighter, deeper, funnier…"
+                  className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:border-violet-300/40 focus:outline-none"
+                />
+                <button type="submit" disabled={!refineText.trim()} className="rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-violet-500 disabled:opacity-50">Refine ↗</button>
+                <button type="button" onClick={() => setIsRefining(false)} className="rounded-xl border border-white/10 px-3 py-2.5 text-xs text-slate-400 hover:text-white">Cancel</button>
+              </motion.form>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
-    </motion.div>
+    </motion.article>
   );
 };
