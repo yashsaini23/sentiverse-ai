@@ -1,125 +1,85 @@
 import asyncio
-from fastapi import FastAPI, HTTPException, Depends, Request
+import logging
+
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-# --- Core Infrastructure Imports ---
 from app.core.config import settings
-from app.core.sanitizer import InputSanitizer
 from app.core.memory import memory_manager
+from app.core.sanitizer import InputSanitizer
 from app.core.security import rate_limiter
-
-# --- AI & Business Logic Imports ---
-from app.services.recommendation import recommendation_service
 from app.ml.emotion_classifier import emotion_engine
+from app.schemas.media import EmotionMetric, MoodRequest, RecommendationWrapperResponse
+from app.services.recommendation import recommendation_service
 
-# --- Strict Schema Imports ---
-from app.schemas.media import (
-    MoodRequest, 
-    RecommendationWrapperResponse, 
-    EmotionMetric
-)
+logger = logging.getLogger(__name__)
 
-# Initialize FastAPI Application with metadata
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="Asynchronous NLP-Driven Sentiment Recommendation Microservice",
-    version=settings.VERSION
+    description="Asynchronous NLP-driven entertainment recommendation API.",
+    version=settings.VERSION,
 )
-
-# Cross-Origin Resource Sharing Protocol (CORS) Configuration
 app.add_middleware(
     CORSMiddleware,
-    # In production, replace ["*"] with your exact Next.js frontend domain (e.g., ["https://sentiverse.com"])
-    allow_origins=["*"], 
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
-@app.post(
-    "/api/v1/recommend", 
-    response_model=RecommendationWrapperResponse,
-    summary="Generate AI Emotion Recommendations",
-    description="Processes raw user mood, extracts emotion tensors, queries vector DB, and generates LLM context."
-)
+
+@app.post("/api/v1/recommend", response_model=RecommendationWrapperResponse)
 async def recommend_media(
-    request: MoodRequest, 
-    http_request: Request,
-    _ = Depends(rate_limiter.check_rate_limit)  # Security: Executes Rate Limiter before any AI processing
-):
-    """
-    Primary orchestration API endpoint. 
-    Maintains low latency by checking session context caches, cleaning input text, 
-    and running the vector engine and classification pipelines in parallel.
-    """
-    # 1. Sanitize raw text to defend internal transformers from injection exploits
-    sanitized_query = InputSanitizer.clean_mood_query(request.query)
-    if not sanitized_query:
-        raise HTTPException(
-            status_code=400, 
-            detail="Provided query contains invalid character combinations or zero valid tokens after sanitization pass."
-        )
-    
+    request: MoodRequest,
+    _rate_limit: None = Depends(rate_limiter.check_rate_limit),
+) -> RecommendationWrapperResponse:
+    query = InputSanitizer.clean_mood_query(request.query)
+    if not query:
+        raise HTTPException(status_code=400, detail="The query is empty after input validation.")
+
     try:
-        # 2. Retrieve history context vectors from Redis state infrastructure
-        user_context = await memory_manager.get_user_context(request.session_id)
-        seen_items = user_context.get("seen_items", [])
+        try:
+            context = await memory_manager.get_user_context(request.session_id)
+        except Exception:
+            logger.warning("Session memory unavailable; continuing without history.", exc_info=True)
+            context = {"seen_items": [], "mood_history": []}
 
-        # 3. Deploy concurrent pipeline workers across the system thread pool
-        recommendation_task = recommendation_service.get_recommendations(
-            mood_query=sanitized_query,
-            limit=request.limit,
-            exclude_ids=seen_items,
-            medium_filters=request.medium_filters
-        )
-        emotion_detection_task = emotion_engine.detect_emotions_async(sanitized_query)
-
-        # Execute operations in parallel to optimize target latency budgets
-        recommendations, explicit_emotions = await asyncio.gather(
-            recommendation_task, 
-            emotion_detection_task
+        recommendations, emotions = await asyncio.gather(
+            recommendation_service.get_recommendations(
+                mood_query=query,
+                limit=request.limit,
+                exclude_ids=context.get("seen_items", []),
+                medium_filters=request.medium_filters,
+            ),
+            emotion_engine.detect_emotions_async(query),
         )
 
-        # 4. Format classification payloads safely for schema matching boundaries
-        formatted_emotions = [
-            EmotionMetric(label=e["label"], score=e["score"]) for e in explicit_emotions
-        ]
-
-        # 5. Asynchronously update the user's history cache in Redis without delaying response generation
-        recommended_ids = [item.id for item in recommendations]
-        asyncio.create_task(
-            memory_manager.update_user_context(
+        try:
+            await memory_manager.update_user_context(
                 session_id=request.session_id,
-                new_mood=sanitized_query,
-                new_items=recommended_ids
+                new_mood=query,
+                new_items=[item.id for item in recommendations],
             )
-        )
+        except Exception:
+            logger.warning("Session memory update failed.", exc_info=True)
 
-        # 6. Emit complete structural system validation metrics
         return RecommendationWrapperResponse(
             status="success",
-            query_intent=sanitized_query,
-            detected_emotions=formatted_emotions,
-            recommendations=recommendations
+            query_intent=query,
+            detected_emotions=[EmotionMetric(label=e["label"], score=e["score"]) for e in emotions],
+            recommendations=recommendations,
         )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Recommendation pipeline failed.")
+        raise HTTPException(status_code=500, detail="The recommendation pipeline encountered an internal error.") from exc
 
-    except Exception as systemic_exception:
-        # Log error traces internally and return a standardized HTTP exception response
-        # Production loggers must append structured traceback information here
-        raise HTTPException(
-            status_code=500,
-            detail=f"A processing error occurred inside the AI pipeline: {str(systemic_exception)}"
-        )
 
-@app.get(
-    "/health", 
-    summary="System Health Check",
-    tags=["Diagnostics"]
-)
-async def health_check():
-    """System heartbeat verification interface for Docker/Kubernetes probes."""
+@app.get("/health", summary="System health check", tags=["Diagnostics"])
+async def health_check() -> dict[str, str]:
     return {
-        "status": "operational", 
+        "status": "operational",
         "engine": f"{settings.PROJECT_NAME} v{settings.VERSION}",
-        "environment": settings.ENVIRONMENT
+        "environment": settings.ENVIRONMENT,
     }

@@ -1,30 +1,38 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
+from pydantic import BaseModel, Field, field_validator
+
 
 class MoodRequest(BaseModel):
-    query: str = Field(..., min_length=1, max_length=500, description="Raw natural language mood input string.")
-    limit: int = Field(default=5, ge=1, le=20, description="Maximum items payload generation target count.")
-    session_id: Optional[str] = Field(default="anonymous_default_user", description="Unique token representing active user state context.")
-    medium_filters: List[str] = Field(default=[], description="List of media types to filter by (e.g., ['Movie', 'Anime']). Empty means no filter.")
+    query: str = Field(..., min_length=1, max_length=500, description="Natural-language mood description.")
+    limit: int = Field(default=5, ge=1, le=20)
+    session_id: str = Field(default="anonymous_default_user", min_length=1, max_length=128)
+    medium_filters: list[str] = Field(default_factory=list)
+
+    @field_validator("medium_filters")
+    @classmethod
+    def clean_medium_filters(cls, values: list[str]) -> list[str]:
+        return list(dict.fromkeys(value.strip() for value in values if value and value.strip()))
+
 
 class EmotionMetric(BaseModel):
     label: str
-    score: float
+    score: float = Field(ge=0.0, le=1.0)
+
 
 class RecommendationResponse(BaseModel):
     id: str
     title: str
     medium: str
-    themes: List[str] = []
-    tone: str
-    pacing: str
-    ending_type: str
-    confidence_score: int
+    themes: list[str] = Field(default_factory=list)
+    tone: str = "nuanced"
+    pacing: str = "moderate"
+    ending_type: str = "open-ended"
+    confidence_score: int = Field(ge=0, le=100)
     ai_explanation: str
-    streaming_links: Dict[str, str] = Field(default_factory=dict, description="Key-Value pairs of provider names and deep links.")
+    streaming_links: dict[str, str] = Field(default_factory=dict)
+
 
 class RecommendationWrapperResponse(BaseModel):
     status: str
     query_intent: str
-    detected_emotions: List[EmotionMetric]
-    recommendations: List[RecommendationResponse]
+    detected_emotions: list[EmotionMetric] = Field(default_factory=list)
+    recommendations: list[RecommendationResponse] = Field(default_factory=list)
