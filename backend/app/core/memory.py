@@ -1,34 +1,36 @@
-import redis.asyncio as redis
 import json
-import os
-from typing import List, Dict
+from typing import Any
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+import redis.asyncio as redis
+
+from app.core.config import settings
+
 
 class MemoryManager:
-    def __init__(self):
-        self.redis = redis.from_url(REDIS_URL, decode_responses=True)
-        self.ttl = 86400 # 24-hour memory retention
+    def __init__(self) -> None:
+        self.redis = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        self.ttl = 86400
 
-    async def get_user_context(self, session_id: str) -> Dict:
-        """Retrieves previously recommended items and past moods."""
-        data = await self.redis.get(f"session:{session_id}")
+    @staticmethod
+    def _session_key(session_id: str) -> str:
+        safe_id = "".join(char for char in session_id if char.isalnum() or char in "-_")[:128]
+        return f"session:{safe_id or 'anonymous_default_user'}"
+
+    async def get_user_context(self, session_id: str) -> dict[str, Any]:
+        data = await self.redis.get(self._session_key(session_id))
         if data:
-            return json.loads(data)
+            parsed = json.loads(data)
+            if isinstance(parsed, dict):
+                parsed.setdefault("seen_items", [])
+                parsed.setdefault("mood_history", [])
+                return parsed
         return {"seen_items": [], "mood_history": []}
 
-    async def update_user_context(self, session_id: str, new_mood: str, new_items: List[str]):
-        """Appends new recommendations and mood queries to the user's session."""
+    async def update_user_context(self, session_id: str, new_mood: str, new_items: list[str]) -> None:
         context = await self.get_user_context(session_id)
-        
-        # Prevent memory bloat
-        context["mood_history"] = (context["mood_history"] + [new_mood])[-10:]
-        context["seen_items"] = list(set(context["seen_items"] + new_items))
+        context["mood_history"] = (context.get("mood_history", []) + [new_mood])[-10:]
+        context["seen_items"] = list(dict.fromkeys(context.get("seen_items", []) + new_items))
+        await self.redis.setex(self._session_key(session_id), self.ttl, json.dumps(context))
 
-        await self.redis.setex(
-            f"session:{session_id}", 
-            self.ttl, 
-            json.dumps(context)
-        )
 
 memory_manager = MemoryManager()
