@@ -150,11 +150,21 @@ class MediaProviderHub:
                     return []
             names = [name for name in providers if name in requested]
             batches = await asyncio.gather(*(safe_fetch(name) for name in names))
-        combined = [item for batch in batches for item in batch]
         unique = {}
-        for item in combined:
-            unique.setdefault(item.id, item)
-        return list(unique.values())[:max(1, min(limit, 20))]
+        for batch in batches:
+            for item in batch:
+                unique.setdefault(item.id, item)
+        grouped = list(unique.values())
+        if not selected:
+            interleaved = []
+            while any(batches):
+                for batch in batches:
+                    if batch:
+                        candidate = batch.pop(0)
+                        if all(item.id != candidate.id for item in interleaved):
+                            interleaved.append(candidate)
+            grouped = interleaved
+        return grouped[:max(1, min(limit, 20))]
 
 
 media_provider_hub = MediaProviderHub()
