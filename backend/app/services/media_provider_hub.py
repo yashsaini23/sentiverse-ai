@@ -70,14 +70,14 @@ class MediaProviderHub:
             ))
         return results
 
-    async def books(self, client: httpx.AsyncClient, query: str, limit: int) -> list[RecommendationResponse]:
+    async def books(self, client: httpx.AsyncClient, query: str, limit: int, language: str = "all") -> list[RecommendationResponse]:
         data = {"items": []}
         # Google Books allows up to 40 results per request.
         for start_index in range(0, limit, 40):
             page_limit = min(40, limit - start_index)
             params = {
                 "q": query, "maxResults": page_limit, "startIndex": start_index,
-                "printType": "books", "langRestrict": "en",
+                "printType": "books", "langRestrict": (language if language != "all" else "en"),
             }
             if settings.GOOGLE_BOOKS_API_KEY:
                 params["key"] = settings.GOOGLE_BOOKS_API_KEY
@@ -108,8 +108,9 @@ class MediaProviderHub:
             ))
         return results
 
-    async def podcasts(self, client: httpx.AsyncClient, query: str, limit: int) -> list[RecommendationResponse]:
-        data = await self._get(client, ITUNES, {"term": query, "media": "podcast", "entity": "podcast", "limit": min(limit, 200), "country": "us"})
+    async def podcasts(self, client: httpx.AsyncClient, query: str, limit: int, region: str = "IN") -> list[RecommendationResponse]:
+        country = "us" if region == "GLOBAL" else region.lower()
+        data = await self._get(client, ITUNES, {"term": query, "media": "podcast", "entity": "podcast", "limit": min(limit, 200), "country": country})
         results = []
         for item in data.get("results", []):
             title = item.get("collectionName") or item.get("trackName") or "Podcast"
@@ -163,7 +164,8 @@ class MediaProviderHub:
             ))
         return results
 
-    async def recommend(self, query: str, limit: int, medium_filters: Sequence[str] | None = None) -> list[RecommendationResponse]:
+    async def recommend(self, query: str, limit: int, medium_filters: Sequence[str] | None = None,
+                        region: str = "IN", language: str = "all") -> list[RecommendationResponse]:
         aliases = {
             "movie": "movie", "movies": "movie", "tv": "tv", "series": "tv", "show": "tv",
             "anime": "anime", "game": "game", "games": "game", "book": "book", "books": "book",
@@ -171,12 +173,12 @@ class MediaProviderHub:
         }
         selected = {aliases.get(value.strip().lower(), value.strip().lower()) for value in (medium_filters or [])}
         providers = {
-            "movie": lambda client: tmdb_catalogue.recommend(query, limit, ["Movie"]),
-            "tv": lambda client: tmdb_catalogue.recommend(query, limit, ["TV"]),
+            "movie": lambda client: tmdb_catalogue.recommend(query, limit, ["Movie"], region, language),
+            "tv": lambda client: tmdb_catalogue.recommend(query, limit, ["TV"], region, language),
             "anime": lambda client: self.anime(client, query, limit),
             "game": lambda client: self.games(client, query, limit),
-            "book": lambda client: self.books(client, query, limit),
-            "podcast": lambda client: self.podcasts(client, query, limit),
+            "book": lambda client: self.books(client, query, limit, language),
+            "podcast": lambda client: self.podcasts(client, query, limit, region),
         }
         requested = selected or set(providers)
         async with httpx.AsyncClient(timeout=12.0, headers={"User-Agent": "SentiVerseAI/1.0 (media discovery)"}) as client:
