@@ -2,7 +2,8 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+# package.json currently contains PostHog while the committed lockfile predates it.
+RUN npm install --no-audit --no-fund
 
 # Build
 FROM node:20-alpine AS builder
