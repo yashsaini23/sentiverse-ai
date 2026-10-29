@@ -45,18 +45,25 @@ class TMDBCatalogue:
 
         async with httpx.AsyncClient(timeout=12.0) as client:
             async def fetch(kind: str, endpoint: str):
-                response = await client.get(
-                    f"{TMDB_API}{endpoint}",
-                    params={
-                        "api_key": settings.TMDB_API_KEY,
-                        "language": "en-US",
-                        "sort_by": "popularity.desc",
-                        "include_adult": "false",
-                        "page": 1,
-                    },
-                )
-                response.raise_for_status()
-                return kind, response.json().get("results", [])
+                collected = []
+                # TMDB returns up to 20 titles per page. Fetch only as many pages as needed.
+                for page in range(1, min(6, (limit + 19) // 20 + 1)):
+                    response = await client.get(
+                        f"{TMDB_API}{endpoint}",
+                        params={
+                            "api_key": settings.TMDB_API_KEY,
+                            "language": "en-US",
+                            "sort_by": "popularity.desc",
+                            "include_adult": "false",
+                            "page": page,
+                        },
+                    )
+                    response.raise_for_status()
+                    page_items = response.json().get("results", [])
+                    collected.extend(page_items)
+                    if len(page_items) < 20 or len(collected) >= limit:
+                        break
+                return kind, collected
 
             responses = await __import__("asyncio").gather(
                 *(fetch(kind, endpoint) for kind, endpoint in endpoints)
@@ -76,7 +83,7 @@ class TMDBCatalogue:
 
         ranked.sort(key=lambda row: (row[0], row[1]), reverse=True)
         output = []
-        for _, _, kind, item, title, overview, score in ranked[: max(1, min(limit, 20))]:
+        for _, _, kind, item, title, overview, score in ranked[: max(1, min(limit, 100))]:
             media_id = item.get("id")
             poster = item.get("poster_path")
             backdrop = item.get("backdrop_path")
