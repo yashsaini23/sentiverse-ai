@@ -62,7 +62,7 @@ export const RecommendationCard: React.FC<RecommendationProps> = ({ item, onRefi
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -5 }}
       transition={{ duration: 0.24 }}
-      className="group h-full overflow-hidden rounded-2xl border border-white/[0.09] bg-[#11111d] shadow-[0_22px_70px_rgba(0,0,0,.25)] transition-colors hover:border-violet-300/30"
+      className="group h-full overflow-hidden rounded-xl border border-white/[0.09] bg-[#11111d] shadow-[0_12px_35px_rgba(0,0,0,.22)] transition-colors hover:border-violet-300/30"
     >
       <div className="relative aspect-[2/3] overflow-hidden bg-gradient-to-br from-slate-800 via-violet-950 to-slate-950">
         {item.poster_url && !imageFailed ? (
@@ -91,7 +91,7 @@ export const RecommendationCard: React.FC<RecommendationProps> = ({ item, onRefi
         </div>
         <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5">
           <p className="mb-2 text-[10px] font-bold uppercase tracking-[.18em] text-violet-200">{art.caption}</p>
-          <h3 className="text-2xl font-bold leading-tight tracking-tight text-white drop-shadow sm:text-3xl">{item.title}</h3>
+          <h3 className="text-base font-bold leading-tight tracking-tight text-white drop-shadow sm:text-lg">{item.title}</h3>
           <div className="mt-3 flex items-center gap-2 text-xs text-white/80">
             <span className="rounded bg-violet-500 px-2 py-1 font-bold text-white">{item.confidence_score}% match</span>
             <span>Picked for your mood</span>
@@ -99,9 +99,9 @@ export const RecommendationCard: React.FC<RecommendationProps> = ({ item, onRefi
         </div>
       </div>
 
-      <div className="space-y-4 p-4 sm:p-5">
+      <div className="space-y-3 p-3">
         {(item.overview || item.ai_explanation) && (
-          <p className="line-clamp-4 text-sm leading-6 text-slate-300">{item.overview || item.ai_explanation}</p>
+          <p className="line-clamp-3 text-xs leading-5 text-slate-300">{item.overview || item.ai_explanation}</p>
         )}
         {item.themes.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
@@ -110,9 +110,9 @@ export const RecommendationCard: React.FC<RecommendationProps> = ({ item, onRefi
             ))}
           </div>
         )}
-        <div className="rounded-xl border border-violet-200/[0.09] bg-violet-300/[0.04] p-3.5">
+        <div className="rounded-lg border border-violet-200/[0.09] bg-violet-300/[0.04] p-3">
           <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[.16em] text-violet-200">✦ Why it fits</p>
-          <p className="text-xs leading-5 text-slate-300">{item.ai_explanation}</p>
+          <p className="line-clamp-3 text-xs leading-5 text-slate-300">{item.ai_explanation}</p>
           <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-500">
             <span>Tone <strong className="capitalize text-slate-300">{item.tone}</strong></span>
             <span>Pacing <strong className="capitalize text-slate-300">{item.pacing}</strong></span>

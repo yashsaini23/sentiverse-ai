@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class MoodRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=500, description="Natural-language mood description.")
-    limit: int = Field(default=5, ge=1, le=20)
+    limit: int = Field(default=100, ge=1, le=100)
     session_id: str = Field(default="anonymous_default_user", min_length=1, max_length=128)
     medium_filters: list[str] = Field(default_factory=list)
 

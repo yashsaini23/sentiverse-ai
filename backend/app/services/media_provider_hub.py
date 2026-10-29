@@ -36,7 +36,20 @@ class MediaProviderHub:
         return response.json()
 
     async def anime(self, client: httpx.AsyncClient, query: str, limit: int) -> list[RecommendationResponse]:
-        data = await self._get(client, f"{JIKAN}/anime", {"q": query, "limit": limit, "sfw": "true", "order_by": "popularity", "sort": "desc"})
+        data = {"data": []}
+        # Jikan caps each page at 25; fetch multiple pages for large batches.
+        for page in range(1, max(2, (limit + 24) // 25 + 1)):
+            remaining = limit - len(data["data"])
+            if remaining <= 0:
+                break
+            batch = await self._get(client, f"{JIKAN}/anime", {
+                "q": query, "limit": min(25, remaining), "page": page,
+                "sfw": "true", "order_by": "popularity", "sort": "desc",
+            })
+            page_items = batch.get("data", [])
+            data["data"].extend(page_items)
+            if len(page_items) < min(25, remaining):
+                break
         results = []
         for item in data.get("data", []):
             title = item.get("title_english") or item.get("title") or "Anime"
@@ -58,10 +71,21 @@ class MediaProviderHub:
         return results
 
     async def books(self, client: httpx.AsyncClient, query: str, limit: int) -> list[RecommendationResponse]:
-        params = {"q": query, "maxResults": limit, "printType": "books", "langRestrict": "en"}
-        if settings.GOOGLE_BOOKS_API_KEY:
-            params["key"] = settings.GOOGLE_BOOKS_API_KEY
-        data = await self._get(client, GOOGLE_BOOKS, params)
+        data = {"items": []}
+        # Google Books allows up to 40 results per request.
+        for start_index in range(0, limit, 40):
+            page_limit = min(40, limit - start_index)
+            params = {
+                "q": query, "maxResults": page_limit, "startIndex": start_index,
+                "printType": "books", "langRestrict": "en",
+            }
+            if settings.GOOGLE_BOOKS_API_KEY:
+                params["key"] = settings.GOOGLE_BOOKS_API_KEY
+            batch = await self._get(client, GOOGLE_BOOKS, params)
+            page_items = batch.get("items", [])
+            data["items"].extend(page_items)
+            if len(page_items) < page_limit:
+                break
         results = []
         for item in data.get("items", []):
             info = item.get("volumeInfo", {})
@@ -85,7 +109,7 @@ class MediaProviderHub:
         return results
 
     async def podcasts(self, client: httpx.AsyncClient, query: str, limit: int) -> list[RecommendationResponse]:
-        data = await self._get(client, ITUNES, {"term": query, "media": "podcast", "entity": "podcast", "limit": limit, "country": "us"})
+        data = await self._get(client, ITUNES, {"term": query, "media": "podcast", "entity": "podcast", "limit": min(limit, 200), "country": "us"})
         results = []
         for item in data.get("results", []):
             title = item.get("collectionName") or item.get("trackName") or "Podcast"
@@ -107,7 +131,20 @@ class MediaProviderHub:
     async def games(self, client: httpx.AsyncClient, query: str, limit: int) -> list[RecommendationResponse]:
         if not settings.RAWG_API_KEY:
             return []
-        data = await self._get(client, f"{RAWG}/games", {"key": settings.RAWG_API_KEY, "search": query, "page_size": limit, "ordering": "-rating"})
+        data = {"results": []}
+        # RAWG page_size is capped at 40, so follow its next-page sequence.
+        for page in range(1, max(2, (limit + 39) // 40 + 1)):
+            remaining = limit - len(data["results"])
+            if remaining <= 0:
+                break
+            batch = await self._get(client, f"{RAWG}/games", {
+                "key": settings.RAWG_API_KEY, "search": query,
+                "page_size": min(40, remaining), "page": page, "ordering": "-rating",
+            })
+            page_items = batch.get("results", [])
+            data["results"].extend(page_items)
+            if len(page_items) < min(40, remaining) or not batch.get("next"):
+                break
         results = []
         for item in data.get("results", []):
             title = item.get("name") or "Game"
@@ -164,7 +201,7 @@ class MediaProviderHub:
                         if all(item.id != candidate.id for item in interleaved):
                             interleaved.append(candidate)
             grouped = interleaved
-        return grouped[:max(1, min(limit, 20))]
+        return grouped[:max(1, min(limit, 100))]
 
 
 media_provider_hub = MediaProviderHub()
