@@ -1,30 +1,50 @@
-from transformers import pipeline
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any
+
 import torch
+from transformers import pipeline
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+
 class EmotionClassifier:
-    def __init__(self):
+    """Loads the transformer pipeline on first use rather than during API import."""
+
+    def __init__(self) -> None:
         self.device = 0 if torch.cuda.is_available() else -1
-        logger.info(f"Loading Emotion Classifier on device {self.device}...")
-        # SamLowe's roberta-base is highly optimized for 28 distinct emotional categories
-        self.classifier = pipeline(
-            "text-classification", 
-            model="SamLowe/roberta-base-go_emotions", 
-            top_k=3, 
-            device=self.device
-        )
-        self.executor = ThreadPoolExecutor(max_workers=2)
+        self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="emotion")
+        self._classifier: Any | None = None
+        self._classifier_lock = threading.Lock()
 
-    def _predict(self, text: str) -> list[dict]:
-        return self.classifier(text)[0]
+    @property
+    def classifier(self) -> Any:
+        if self._classifier is None:
+            with self._classifier_lock:
+                if self._classifier is None:
+                    logger.info("Loading emotion model %s on device %s", settings.EMOTION_MODEL, self.device)
+                    self._classifier = pipeline(
+                        "text-classification",
+                        model=settings.EMOTION_MODEL,
+                        top_k=3,
+                        device=self.device,
+                    )
+        return self._classifier
 
-    async def detect_emotions_async(self, text: str) -> list[dict]:
-        """Returns the top 3 detected emotions and their confidence scores."""
+    def _predict(self, text: str) -> list[dict[str, Any]]:
+        result = self.classifier(text)
+        # With top_k set, transformers returns a list of label/score dictionaries per input.
+        if result and isinstance(result[0], list):
+            result = result[0]
+        return result
+
+    async def detect_emotions_async(self, text: str) -> list[dict[str, Any]]:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self.executor, self._predict, text)
+
 
 emotion_engine = EmotionClassifier()
