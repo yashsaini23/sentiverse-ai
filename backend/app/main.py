@@ -10,13 +10,13 @@ from app.core.sanitizer import InputSanitizer
 from app.core.security import rate_limiter
 from app.ml.emotion_classifier import emotion_engine
 from app.schemas.media import EmotionMetric, MoodRequest, RecommendationWrapperResponse
-from app.services.recommendation import recommendation_service
+from app.services.external_media_catalog import external_media_catalog
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="Asynchronous NLP-driven entertainment recommendation API.",
+    description="Mood-aware entertainment recommendations powered by public media APIs.",
     version=settings.VERSION,
 )
 app.add_middleware(
@@ -45,7 +45,7 @@ async def recommend_media(
             context = {"seen_items": [], "mood_history": []}
 
         recommendations, emotions = await asyncio.gather(
-            recommendation_service.get_recommendations(
+            external_media_catalog.get_recommendations(
                 mood_query=query,
                 limit=request.limit,
                 exclude_ids=context.get("seen_items", []),
