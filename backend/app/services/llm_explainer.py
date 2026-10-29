@@ -1,63 +1,58 @@
-import os
-import asyncio
 import hashlib
 import logging
+import os
+
 from openai import AsyncOpenAI
+
+from app.core.config import settings
 from app.core.memory import memory_manager
 
 logger = logging.getLogger(__name__)
 
-class LLMExplainer:
-    def __init__(self):
-        self.client = AsyncOpenAI(
-            api_key=os.getenv("OPENAI_API_KEY", "missing_key"),
-        )
-        self.model = "gpt-3.5-turbo"
-        # Cache Time-To-Live: 7 days
-        self.cache_ttl = 604800 
 
-    def _generate_cache_key(self, mood: str, media_id: str) -> str:
-        """Generates a deterministic hash key for Redis caching."""
-        mood_hash = hashlib.md5(mood.strip().lower().encode()).hexdigest()
+class LLMExplainer:
+    def __init__(self) -> None:
+        api_key = os.getenv("OPENAI_API_KEY")
+        self.client = AsyncOpenAI(api_key=api_key) if api_key else None
+        self.model = os.getenv("OPENAI_MODEL", settings.OPENAI_MODEL)
+        self.cache_ttl = 604800
+
+    @staticmethod
+    def _generate_cache_key(mood: str, media_id: str) -> str:
+        mood_hash = hashlib.sha256(mood.strip().lower().encode("utf-8")).hexdigest()
         return f"llm_cache:{media_id}:{mood_hash}"
 
     async def generate_explanation(self, user_mood: str, media_meta: dict, media_id: str) -> str:
-        """
-        Fetches an empathetic explanation from Redis cache if available, 
-        otherwise generates it via LLM and caches the result.
-        """
         cache_key = self._generate_cache_key(user_mood, media_id)
-        
-        # 1. Check Redis Cache First
         try:
-            cached_explanation = await memory_manager.redis.get(cache_key)
-            if cached_explanation:
-                return cached_explanation
-        except Exception as e:
-            logger.warning(f"Redis cache read failed: {str(e)}")
+            cached = await memory_manager.redis.get(cache_key)
+            if cached:
+                return cached
+        except Exception:
+            logger.warning("Redis explanation-cache read failed", exc_info=True)
 
-        # 2. LLM Generation Fallback
-        title = media_meta.get("title", "this title")
-        medium = media_meta.get("medium", "item")
-        themes = media_meta.get("themes", "complex themes")
-        tone = media_meta.get("tone", "nuanced")
+        title = str(media_meta.get("title", "this title"))
+        medium = str(media_meta.get("medium", "item"))
+        themes = str(media_meta.get("themes", "complex themes"))
+        tone = str(media_meta.get("tone", "nuanced"))
+        fallback = (
+            f"The themes of {themes} in {title} may resonate with how you're feeling. "
+            "Take what feels helpful and leave the rest."
+        )
+
+        if self.client is None:
+            logger.info("OPENAI_API_KEY is not configured; using the local explanation fallback.")
+            return fallback
 
         system_prompt = (
             "You are SentiVerse, an empathetic AI entertainment curator. "
-            "Explain to the user WHY you recommended this specific piece of media based on their mood. "
-            "Rules:\n"
-            "1. Be empathetic. Validate their feelings.\n"
-            "2. Keep it to exactly two concise, comforting sentences.\n"
-            "3. Mention the media's themes or tone and how it helps their current state.\n"
-            "4. Speak naturally, directly to the user."
+            "Explain why this media may fit the user's stated mood. "
+            "Use exactly two concise, natural sentences; validate feelings without diagnosing, "
+            "making promises, or claiming the media will treat a condition."
         )
-
         user_prompt = (
-            f"User's mood: '{user_mood}'\n"
-            f"Recommended {medium}: '{title}'\n"
-            f"Media Themes: {themes}\n"
-            f"Media Tone: {tone}\n\n"
-            f"Write the explanation."
+            f"User mood: {user_mood!r}\nRecommended {medium}: {title!r}\n"
+            f"Themes: {themes}\nTone: {tone}\nWrite the explanation."
         )
 
         try:
@@ -65,25 +60,22 @@ class LLMExplainer:
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": user_prompt},
                 ],
-                max_tokens=80,
+                max_tokens=100,
                 temperature=0.7,
             )
-            explanation = response.choices[0].message.content.strip()
-            
-            # 3. Save to Redis Cache Asynchronously
-            asyncio.create_task(
-                memory_manager.redis.setex(cache_key, self.cache_ttl, explanation)
-            )
-            
+            explanation = (response.choices[0].message.content or "").strip()
+            if not explanation:
+                return fallback
+            try:
+                await memory_manager.redis.setex(cache_key, self.cache_ttl, explanation)
+            except Exception:
+                logger.warning("Redis explanation-cache write failed", exc_info=True)
             return explanation
-            
-        except Exception as e:
-            logger.error(f"LLM Explanation failed: {str(e)}")
-            return (
-                f"The themes of {themes} in this {medium.lower()} deeply align "
-                f"with your feeling of '{user_mood}'."
-            )
+        except Exception:
+            logger.exception("LLM explanation generation failed")
+            return fallback
+
 
 llm_explainer = LLMExplainer()
