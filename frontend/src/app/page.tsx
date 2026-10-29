@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePostHog } from 'posthog-js/react';
 import { RecommendationCard } from '@/components/RecommendationCard';
@@ -23,189 +23,238 @@ interface RecommendationData {
   streaming_links: Record<string, string>;
 }
 
+const starterMoods = [
+  { icon: '🌧️', label: 'I feel lonely, but I want a little hope.', tag: 'Find hope' },
+  { icon: '🌿', label: 'I am overwhelmed and need something calming.', tag: 'Slow down' },
+  { icon: '🔥', label: 'I need motivation to keep pushing forward.', tag: 'Get inspired' },
+  { icon: '🌙', label: 'I want something deep, thoughtful, and bittersweet.', tag: 'Feel deeply' },
+];
+
 export default function Home() {
-  const [isMounted, setIsMounted] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const posthog = usePostHog(); // GROWTH ANALYTICS
-
-  useEffect(() => setIsMounted(true), []);
-
-  const sessionId = useAppStore((state) => state.sessionId);
-  const addToHistory = useAppStore((state) => state.addToHistory);
-
   const [mood, setMood] = useState('');
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState<string[]>([]);
   const [results, setResults] = useState<RecommendationData[]>([]);
   const [detectedEmotions, setDetectedEmotions] = useState<Emotion[]>([]);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [hasSearched, setHasSearched] = useState(false);
+  const posthog = usePostHog();
+  const sessionId = useAppStore((state) => state.sessionId);
+  const addToHistory = useAppStore((state) => state.addToHistory);
 
-  const fetchRecommendations = async (searchQuery: string) => {
+  const fetchRecommendations = useCallback(async (searchQuery: string) => {
+    const query = searchQuery.trim();
+    if (!query) {
+      setErrorMessage('Tell us a little about how you feel first.');
+      return;
+    }
+
     setLoading(true);
-    setResults([]); 
+    setErrorMessage('');
+    setHasSearched(true);
+    setResults([]);
     setDetectedEmotions([]);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const apiUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
       const response = await fetch(`${apiUrl}/api/v1/recommend`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          query: searchQuery, 
-          limit: 4, 
+        body: JSON.stringify({
+          query,
+          limit: 4,
           session_id: sessionId,
-          medium_filters: filters 
-        })
+          medium_filters: filters,
+        }),
       });
 
-      if (!response.ok) throw new Error(`API Error: ${response.status}`);
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        const detail = payload?.detail;
+        throw new Error(typeof detail === 'string' ? detail : `The API returned error ${response.status}. Check that the backend is running.`);
+      }
 
-      const data = await response.json();
-      
-      setResults(data.recommendations || []);
-      setDetectedEmotions(data.detected_emotions || []);
-      
+      setResults(Array.isArray(payload?.recommendations) ? payload.recommendations : []);
+      setDetectedEmotions(Array.isArray(payload?.detected_emotions) ? payload.detected_emotions : []);
       addToHistory({
-        mood: searchQuery,
+        mood: query,
         timestamp: new Date().toISOString(),
-        topEmotions: data.detected_emotions || []
+        topEmotions: Array.isArray(payload?.detected_emotions) ? payload.detected_emotions : [],
       });
+      posthog?.capture('mood_searched', { mood: query, filters });
     } catch (error) {
-      console.error("Pipeline Search Error:", error);
+      console.error('SentiVerse recommendation request failed:', error);
+      setErrorMessage(
+        error instanceof TypeError
+          ? 'Could not reach the SentiVerse API. Make sure Docker containers are running, then retry.'
+          : error instanceof Error
+            ? error.message
+            : 'Something went wrong while analyzing your mood. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
+  }, [addToHistory, filters, posthog, sessionId]);
+
+  const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void fetchRecommendations(mood);
   };
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!mood.trim()) return;
-    
-    // GROWTH ANALYTICS: Track what users are feeling
-    posthog?.capture('mood_searched', {
-      mood: mood,
-      filters: filters,
-    });
-
-    fetchRecommendations(mood);
-  };
+  const handleVoiceTranscript = useCallback((transcript: string) => {
+    setMood(transcript);
+  }, []);
 
   const handleRefinement = (title: string, refinementContext: string) => {
-    const refinedQuery = `${mood}. But specifically regarding ${title}: ${refinementContext}`;
-    
-    // GROWTH ANALYTICS: Track how users refine their results
-    posthog?.capture('mood_refined', {
-      original_mood: mood,
-      title: title,
-      refinement: refinementContext
-    });
-
-    setMood(refinedQuery); 
-    fetchRecommendations(refinedQuery);
+    const refinedQuery = `${mood}. For ${title}, please find something that is ${refinementContext}.`;
+    setMood(refinedQuery);
+    void fetchRecommendations(refinedQuery);
+    posthog?.capture('mood_refined', { original_mood: mood, title, refinement: refinementContext });
   };
 
-  if (!isMounted) return null;
-
   return (
-    <main className="min-h-screen bg-gradient-to-br from-gray-950 via-slate-900 to-black text-white px-4 py-12 md:p-24 relative overflow-x-hidden flex flex-col items-center">
-      {/* Navbar / Tool Bar */}
-      <div className="absolute top-6 right-6 z-20">
-        <button 
-          onClick={() => setIsSidebarOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-sm font-medium transition-all backdrop-blur-md shadow-lg"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-          </svg>
-          Mood Journal
-        </button>
-      </div>
+    <main className="sv-shell min-h-screen overflow-hidden text-white">
+      <div className="sv-noise" aria-hidden="true" />
+      <div className="sv-glow sv-glow-one" aria-hidden="true" />
+      <div className="sv-glow sv-glow-two" aria-hidden="true" />
+
+      <header className="relative z-20 mx-auto flex w-full max-w-7xl items-center justify-between px-5 py-5 sm:px-8 lg:px-12">
+        <a href="/" className="flex items-center gap-3" aria-label="SentiVerse home">
+          <span className="sv-logo-mark"><span>✳</span></span>
+          <span className="text-lg font-semibold tracking-tight">senti<span className="text-violet-300">verse</span></span>
+        </a>
+        <div className="flex items-center gap-3">
+          <span className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-3 py-2 text-xs text-slate-300 sm:flex">
+            <span className="sv-status-dot" /> Made for your mood
+          </span>
+          <button onClick={() => setIsSidebarOpen(true)} className="sv-journal-button" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.75A1.75 1.75 0 0 1 6.75 3h11.5A1.75 1.75 0 0 1 20 4.75v15.5A1.75 1.75 0 0 1 18.25 22H6.75A1.75 1.75 0 0 1 5 20.25zM8 7h8M8 11h8M8 15h5" /></svg>
+            <span>My journal</span>
+          </button>
+        </div>
+      </header>
 
       <MoodJournalSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
-      {/* Ambient Orbs */}
-      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[160px] pointer-events-none" />
-      <div className="absolute bottom-10 right-1/4 w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[160px] pointer-events-none" />
+      <section className="relative z-10 mx-auto flex w-full max-w-7xl flex-col items-center px-5 pb-20 pt-10 sm:px-8 sm:pt-16 lg:px-12 lg:pt-20">
+        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="w-full max-w-4xl text-center">
+          <div className="sv-eyebrow mx-auto mb-6"><span className="sv-spark">✦</span> YOUR FEELINGS, YOUR NEXT FAVOURITE</div>
+          <h1 className="sv-hero-title mx-auto max-w-4xl">
+            Find the story that <span>feels like you.</span>
+          </h1>
+          <p className="mx-auto mt-6 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg sm:leading-8">
+            Movies for the mood you can’t explain. Games for the days you need a win.
+            Stories that meet you exactly where you are.
+          </p>
+        </motion.div>
 
-      {/* Hero Section */}
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="text-center w-full max-w-3xl mb-12 z-10"
-      >
-        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-4 bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-violet-400 to-purple-400">
-          SentiVerse
-        </h1>
-        <p className="text-lg md:text-xl text-gray-400 font-light">
-          Describe your exact state of mind. We will find the art that matches it.
-        </p>
-      </motion.div>
-
-      {/* Search Input & Filters Area */}
-      <div className="w-full max-w-2xl z-10 mb-12">
-        <MediaFilters selectedFilters={filters} onChange={setFilters} />
-        
-        <form onSubmit={handleSearch} className="relative w-full flex items-center">
-          <input 
-            type="text"
-            value={mood}
-            onChange={(e) => setMood(e.target.value)}
-            placeholder="I feel utterly heartbroken but I want to find hope..."
-            className="w-full pl-6 pr-40 py-5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 shadow-2xl transition-all text-base md:text-lg"
-          />
-          
-          <VoiceInput onTranscript={(text) => setMood(text)} />
-
-          <button 
-            type="submit"
-            disabled={loading}
-            className="absolute right-3 top-3 bottom-3 px-6 bg-indigo-600 hover:bg-indigo-500 active:scale-95 rounded-xl font-medium tracking-wide transition-all disabled:opacity-50 flex items-center justify-center min-w-[120px]"
-          >
-            {loading ? (
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>Sensing</span>
+        <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12, duration: 0.6 }} className="sv-search-panel mt-10 w-full max-w-3xl sm:mt-12">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <label htmlFor="mood-input" className="text-sm font-medium text-slate-200">What’s on your mind?</label>
+            <span className="text-xs text-slate-500">Be real. There’s no wrong answer.</span>
+          </div>
+          <form onSubmit={handleSearch}>
+            <div className="sv-input-wrap">
+              <textarea
+                id="mood-input"
+                value={mood}
+                onChange={(event) => setMood(event.target.value)}
+                placeholder="I’ve had a long week. I feel a little lost, but I want something that reminds me things can get better..."
+                maxLength={500}
+                rows={3}
+                className="sv-mood-input"
+                aria-describedby="mood-help"
+              />
+              <div className="flex items-center justify-between gap-3 border-t border-white/[0.07] px-4 py-3 sm:px-5">
+                <span id="mood-help" className="text-xs text-slate-500">{mood.length}/500 characters</span>
+                <div className="flex items-center gap-2">
+                  <VoiceInput onTranscript={handleVoiceTranscript} />
+                  <button type="submit" disabled={loading || !mood.trim()} className="sv-analyze-button">
+                    {loading ? <><span className="sv-spinner" /> Finding your story…</> : <>Find my story <span aria-hidden="true">↗</span></>}
+                  </button>
+                </div>
               </div>
-            ) : 'Analyze'}
-          </button>
-        </form>
-      </div>
+            </div>
+          </form>
 
-      <AnimatePresence mode="wait">
-        {detectedEmotions.length > 0 && !loading && (
-          <motion.div
-            key="emotion-visualizer"
-            initial={{ opacity: 0, height: 0, marginBottom: 0 }}
-            animate={{ opacity: 1, height: 'auto', marginBottom: 48 }}
-            exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-            className="w-full max-w-2xl z-10 overflow-hidden"
-          >
-            <EmotionVisualizer emotions={detectedEmotions} />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div className="w-full max-w-6xl z-10">
-        <AnimatePresence mode="wait">
-          {results.length > 0 && !loading && (
-            <motion.div
-              key="results-grid"
-              initial="hidden"
-              animate="visible"
-              exit={{ opacity: 0 }}
-              variants={{ visible: { transition: { staggerChildren: 0.1 } } }}
-              className="grid grid-cols-1 md:grid-cols-2 gap-6"
-            >
-              {results.map((item) => (
-                <RecommendationCard 
-                  key={item.id} 
-                  item={item} 
-                  onRefine={handleRefinement} 
-                />
+          <div className="mt-5">
+            <p className="mb-3 text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Need a starting point?</p>
+            <div className="flex flex-wrap gap-2">
+              {starterMoods.map((starter) => (
+                <button key={starter.tag} type="button" onClick={() => setMood(starter.label)} className="sv-prompt-chip">
+                  <span>{starter.icon}</span>{starter.tag}
+                </button>
               ))}
+            </div>
+          </div>
+        </motion.div>
+
+        <AnimatePresence>
+          {errorMessage && (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} role="alert" className="sv-error-banner mt-6 w-full max-w-3xl">
+              <span className="sv-error-icon">!</span>
+              <div className="flex-1">
+                <p className="font-semibold text-rose-100">We couldn’t finish that request</p>
+                <p className="mt-1 text-sm leading-6 text-rose-200/80">{errorMessage}</p>
+              </div>
+              <button type="button" onClick={() => void fetchRecommendations(mood)} disabled={loading || !mood.trim()} className="sv-retry-button">Retry</button>
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
+
+        {loading && (
+          <div className="sv-loading-panel mt-8 w-full max-w-3xl" role="status">
+            <span className="sv-loading-orbit">✳</span>
+            <div>
+              <p className="font-medium text-white">Tuning into your mood</p>
+              <p className="mt-1 text-sm text-slate-400">Reading the feeling, searching stories, finding your match. First-time model loading can take a little while.</p>
+            </div>
+          </div>
+        )}
+
+        {!loading && detectedEmotions.length > 0 && (
+          <div className="mt-10 w-full max-w-3xl">
+            <div className="mb-4 flex items-end justify-between gap-4">
+              <div><p className="sv-section-kicker">THE FEELING BEHIND THE WORDS</p><h2 className="mt-1 text-xl font-semibold">Your emotional signature</h2></div>
+            </div>
+            <EmotionVisualizer emotions={detectedEmotions} />
+          </div>
+        )}
+
+        {!loading && results.length > 0 && (
+          <section className="mt-12 w-full max-w-6xl" aria-live="polite">
+            <div className="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+              <div><p className="sv-section-kicker">CURATED FOR THIS MOMENT</p><h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">A few stories for you.</h2><p className="mt-2 text-sm text-slate-400">Picked for the mood you shared — not just a genre.</p></div>
+              <div className="w-full sm:w-auto"><MediaFilters selectedFilters={filters} onChange={setFilters} /></div>
+            </div>
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              {results.map((item, index) => <motion.div key={item.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.08 }}><RecommendationCard item={item} onRefine={handleRefinement} /></motion.div>)}
+            </div>
+          </section>
+        )}
+
+        {!loading && hasSearched && !errorMessage && results.length === 0 && (
+          <div className="sv-empty-state mt-10 w-full max-w-3xl" aria-live="polite">
+            <span className="sv-empty-icon">✧</span>
+            <div><h2 className="text-lg font-semibold text-white">We found your mood, but not a match yet.</h2><p className="mt-2 text-sm leading-6 text-slate-400">The recommendation library may still be warming up or needs its starter catalogue. Try again in a moment; if this keeps happening, check the backend logs.</p></div>
+            <button type="button" onClick={() => void fetchRecommendations(mood)} className="sv-retry-button">Try again</button>
+          </div>
+        )}
+
+        {!hasSearched && (
+          <div className="mt-14 grid w-full max-w-4xl grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="sv-value-card"><span className="sv-value-icon">01</span><div><p className="font-medium text-slate-100">Start with a feeling</p><p className="mt-1 text-sm leading-5 text-slate-500">No genres or complicated filters needed.</p></div></div>
+            <div className="sv-value-card"><span className="sv-value-icon">02</span><div><p className="font-medium text-slate-100">Get thoughtful picks</p><p className="mt-1 text-sm leading-5 text-slate-500">Stories matched to your words and themes.</p></div></div>
+            <div className="sv-value-card"><span className="sv-value-icon">03</span><div><p className="font-medium text-slate-100">Make it more you</p><p className="mt-1 text-sm leading-5 text-slate-500">Refine the results until they feel right.</p></div></div>
+          </div>
+        )}
+
+        <footer className="mt-16 flex w-full max-w-4xl flex-col items-center justify-between gap-3 border-t border-white/[0.07] pt-6 text-xs text-slate-600 sm:flex-row">
+          <span>✳ SentiVerse <span className="text-slate-700">·</span> Art for the way you feel.</span>
+          <span>Your mood is personal. Your next story can be, too.</span>
+        </footer>
+      </section>
     </main>
   );
 }

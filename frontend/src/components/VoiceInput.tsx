@@ -60,7 +60,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onTranscript }) => {
       type="button"
       onClick={toggleListen}
       whileTap={{ scale: 0.9 }}
-      className={`absolute right-36 top-3 bottom-3 px-4 rounded-xl flex items-center justify-center transition-all ${
+      className={`px-3 py-2 rounded-xl flex items-center justify-center transition-all text-xs ${
         isListening 
           ? 'bg-red-500/20 text-red-400 border border-red-500/50' 
           : 'bg-white/5 text-gray-400 hover:text-white border border-transparent'
