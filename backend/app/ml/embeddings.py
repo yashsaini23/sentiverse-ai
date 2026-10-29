@@ -1,26 +1,49 @@
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
-from sentence_transformers import SentenceTransformer
-import torch
 import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor
+
+import torch
+from sentence_transformers import SentenceTransformer
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+
 class EmbeddingEngine:
-    def __init__(self):
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        logger.info(f"Loading embedding model on {self.device}...")
-        self.model = SentenceTransformer('all-MiniLM-L6-v2', device=self.device)
-        # Dedicated thread pool executor for heavy tensor computations
-        self.executor = ThreadPoolExecutor(max_workers=4)
+    """Loads the embedding model only when the first embedding is requested."""
+
+    def __init__(self) -> None:
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="embedding")
+        self._model: SentenceTransformer | None = None
+        self._model_lock = threading.Lock()
+
+    @property
+    def model(self) -> SentenceTransformer:
+        if self._model is None:
+            with self._model_lock:
+                if self._model is None:
+                    logger.info("Loading embedding model %s on %s", settings.EMBEDDING_MODEL, self.device)
+                    self._model = SentenceTransformer(settings.EMBEDDING_MODEL, device=self.device)
+        return self._model
 
     def _encode(self, text: str) -> list[float]:
-        # Enforce model-level truncation safely
-        return self.model.encode(text, convert_to_numpy=True).tolist()
+        return self.model.encode(
+            text,
+            convert_to_numpy=True,
+            normalize_embeddings=True,
+        ).tolist()
+
+    def generate_embedding(self, text: str) -> list[float]:
+        """Synchronous interface for CLI scripts and ingestion jobs."""
+        return self._encode(text)
 
     async def generate_embedding_async(self, text: str) -> list[float]:
-        """Offloads heavy tensor computation to a managed thread pool."""
+        """Run model inference outside the event loop."""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self.executor, self._encode, text)
+
 
 embedding_engine = EmbeddingEngine()
