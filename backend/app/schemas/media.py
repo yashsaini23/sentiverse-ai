@@ -6,6 +6,8 @@ class MoodRequest(BaseModel):
     limit: int = Field(default=100, ge=1, le=100)
     session_id: str = Field(default="anonymous_default_user", min_length=1, max_length=128)
     medium_filters: list[str] = Field(default_factory=list)
+    region: str = Field(default="IN", pattern="^(IN|US|GB|CA|AU|JP|KR|GLOBAL)$")
+    language: str = Field(default="all", pattern="^(all|hi|ta|te|ml|kn|bn|mr|pa|gu|en|ja|ko)$")
 
     @field_validator("medium_filters")
     @classmethod
