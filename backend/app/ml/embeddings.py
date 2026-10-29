@@ -31,7 +31,7 @@ class EmbeddingEngine:
     def _encode(self, text: str) -> list[float]:
         if not text or not text.strip():
             raise ValueError("Text must not be empty.")
-        return self._get_model().encode(text.strip(), convert_to_numpy=True, normalize_embeddings=True).tolist()
+        return self._get_model().encode(text.strip(), convert_to_numpy=True).tolist()
 
     async def generate_embedding_async(self, text: str) -> list[float]:
         loop = asyncio.get_running_loop()
