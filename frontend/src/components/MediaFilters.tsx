@@ -1,8 +1,7 @@
 import React from 'react';
 
-// TMDB currently powers these two media types. Additional providers can be added
-// without showing filters that cannot return results yet.
-const MEDIA_TYPES = ['All', 'Movie', 'TV'];
+// Filters map to the live catalogue adapters in the backend.
+const MEDIA_TYPES = ['All', 'Movie', 'TV', 'Anime', 'Game', 'Book', 'Podcast'];
 
 interface MediaFiltersProps {
   selectedFilters: string[];
