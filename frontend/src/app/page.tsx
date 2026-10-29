@@ -215,6 +215,7 @@ export default function Home() {
               Original language
               <select value={language} onChange={(event) => setLanguage(event.target.value)} className="rounded-xl border border-white/10 bg-[#10101d] px-3 py-3 text-sm text-white outline-none focus:border-violet-400/60">
                 <option value="all">Any language</option>
+                <option value="regional">Indian regional languages</option>
                 <option value="hi">Hindi</option>
                 <option value="ta">Tamil</option>
                 <option value="te">Telugu</option>
