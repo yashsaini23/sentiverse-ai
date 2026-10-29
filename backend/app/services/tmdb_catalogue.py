@@ -58,7 +58,9 @@ class TMDBCatalogue:
                     }
                     if region != "GLOBAL":
                         params["region"] = region
-                    if language != "all":
+                    if language == "regional":
+                        params["with_original_language"] = "hi|ta|te|ml|kn|bn|mr|pa|gu"
+                    elif language != "all":
                         params["with_original_language"] = language
                     response = await client.get(f"{TMDB_API}{endpoint}", params=params)
                     response.raise_for_status()
