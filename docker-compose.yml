@@ -23,7 +23,6 @@ services:
       ENVIRONMENT: development
       REDIS_URL: redis://redis:6379/0
       CHROMA_DB_DIR: /app/data/chroma
-      TMDB_API_KEY: ${TMDB_API_KEY:-}
       CORS_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000"]'
     env_file:
       - path: ./backend/.env
