@@ -12,7 +12,7 @@ from app.core.security import rate_limiter
 from app.ml.emotion_classifier import emotion_engine
 from app.schemas.media import EmotionMetric, MoodRequest, RecommendationWrapperResponse
 from app.services.recommendation import recommendation_service
-from app.services.tmdb_catalogue import tmdb_catalogue
+from app.services.media_provider_hub import media_provider_hub
 
 logger = logging.getLogger(__name__)
 
@@ -47,19 +47,20 @@ async def recommend_media(
             context = {"seen_items": [], "mood_history": []}
 
         async def get_media():
-            # Prefer live TMDB results when configured; retain local catalogue as a no-key dev fallback.
-            if settings.TMDB_API_KEY:
-                try:
-                    live = await tmdb_catalogue.recommend(
-                        query=query,
-                        limit=request.limit,
-                        medium_filters=request.medium_filters,
-                    )
-                    seen = set(context.get("seen_items", []))
-                    fresh = [item for item in live if item.id not in seen]
-                    return fresh or live
-                except httpx.HTTPError:
-                    logger.exception("TMDB request failed; falling back to local catalogue.")
+            try:
+                live = await media_provider_hub.recommend(
+                    query=query,
+                    limit=request.limit,
+                    medium_filters=request.medium_filters,
+                )
+                seen = set(context.get("seen_items", []))
+                fresh = [item for item in live if item.id not in seen]
+                if fresh:
+                    return fresh
+                if live:
+                    return live
+            except httpx.HTTPError:
+                logger.exception("A live media provider failed; falling back to local catalogue.")
             return await recommendation_service.get_recommendations(
                 mood_query=query,
                 limit=request.limit,
